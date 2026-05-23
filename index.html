@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>eBay Lister</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ── Navigation ──────────────────────────────────────────── -->
+  <nav class="nav">
+    <span class="nav-brand">eBay Lister</span>
+    <button class="nav-btn active" data-view="main"     onclick="showView('main')">Listings</button>
+    <button class="nav-btn"        data-view="settings" onclick="showView('settings')">Settings</button>
+  </nav>
+
+  <!-- ================================================================
+       MAIN VIEW — Add listings + queue
+       ================================================================ -->
+  <div id="view-main" class="view">
+    <div class="main-layout">
+
+      <!-- ── Add Listing Form (left panel) ─────────────────────── -->
+      <aside class="form-panel">
+        <h2>Add Listing</h2>
+
+        <!-- Listing type toggle -->
+        <div class="type-toggle">
+          <button class="type-btn active" data-type="single" onclick="setType('single')">Single Card</button>
+          <button class="type-btn"        data-type="lot"    onclick="setType('lot')">Card Lot</button>
+        </div>
+
+        <!-- Title -->
+        <div class="form-group">
+          <label>Title <span class="char-count"><span id="title-count">0</span>/80</span></label>
+          <input type="text" id="input-title"
+            placeholder="e.g. Charizard ex 006/165 Scarlet &amp; Violet 151"
+            maxlength="80">
+        </div>
+
+        <!-- Price -->
+        <div class="form-group">
+          <label>Price</label>
+          <div class="input-prefix">
+            <span>$</span>
+            <input type="number" id="input-price"
+              placeholder="0.00" min="0.01" step="0.01">
+          </div>
+        </div>
+
+        <!-- Condition -->
+        <div class="form-group">
+          <label>Condition</label>
+          <select id="input-condition">
+            <option value="LIKE_NEW">Near Mint (NM)</option>
+            <option value="VERY_GOOD">Lightly Played (LP)</option>
+            <option value="GOOD">Moderately Played (MP)</option>
+            <option value="ACCEPTABLE_HP">Heavily Played (HP)</option>
+            <option value="ACCEPTABLE_D">Damaged (D)</option>
+          </select>
+        </div>
+
+        <!-- Card count — only visible for lots -->
+        <div class="form-group" id="group-cardcount" style="display:none">
+          <label>Number of Cards in Lot</label>
+          <input type="number" id="input-cardcount"
+            placeholder="e.g. 50" min="1" step="1">
+        </div>
+
+        <!-- Photos -->
+        <div class="form-group">
+          <label>Photos <span class="label-note">drag to reorder · first photo = main image</span></label>
+          <div id="photo-drop-zone" class="photo-drop-zone"
+            onclick="document.getElementById('photo-input').click()">
+            Click to add photos, or drag &amp; drop here
+          </div>
+          <input type="file" id="photo-input" accept="image/*" multiple style="display:none">
+          <div id="photo-strip" class="photo-strip" style="display:none"></div>
+          <button class="btn-secondary" style="margin-top:6px; font-size:12px; padding:5px 10px"
+            onclick="document.getElementById('photo-input').click()"
+            id="btn-add-more-photos" style="display:none">
+            + Add more photos
+          </button>
+        </div>
+
+        <!-- Description -->
+        <div class="form-group">
+          <label>Description <span class="label-note">auto-filled · editable</span></label>
+          <textarea id="input-description" rows="5"></textarea>
+        </div>
+
+        <!-- Shipping preview (read-only, auto-calculated) -->
+        <div class="form-group">
+          <label>Shipping</label>
+          <div id="shipping-preview" class="shipping-badge">— enter a price to see shipping method</div>
+        </div>
+
+        <!-- Submit -->
+        <button class="btn-primary btn-full" onclick="addToQueue()">
+          Add to Queue
+        </button>
+      </aside>
+
+      <!-- ── Queue (right panel) ────────────────────────────────── -->
+      <main class="queue-panel">
+
+        <div class="queue-header">
+          <h2>Queue <span id="queue-count" class="queue-count">0 items</span></h2>
+          <button class="btn-danger-outline" id="btn-clear"
+            onclick="clearQueue()" style="display:none">
+            Clear Pending
+          </button>
+          <button class="btn-secondary" id="btn-clear-completed"
+            onclick="clearCompleted()" style="display:none; font-size:12px; padding:6px 12px">
+            Clear Listed
+          </button>
+        </div>
+
+        <!-- Empty state -->
+        <div id="queue-empty" class="queue-empty">
+          <div style="font-size:40px; margin-bottom:8px">🃏</div>
+          <p style="font-size:15px; color: var(--text-dim)">Your queue is empty</p>
+          <p>Fill in the form on the left and click <strong>Add to Queue</strong></p>
+        </div>
+
+        <!-- Listing cards -->
+        <div id="queue-grid" class="queue-grid" style="display:none"></div>
+
+        <!-- List All button -->
+        <div class="queue-footer" id="queue-footer" style="display:none">
+          <button class="btn-primary btn-large" id="btn-list-all" onclick="listAll()">
+            List Items on eBay
+          </button>
+        </div>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- ================================================================
+       SETTINGS VIEW
+       ================================================================ -->
+  <div id="view-settings" class="view" style="display:none">
+    <div class="settings-panel">
+      <h2>Settings</h2>
+      <div id="settings-content">
+        <!-- Filled dynamically by settings.js → renderSettings() -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts — order matters: settings first, then ebay, then app -->
+  <script src="settings.js"></script>
+  <script src="ebay.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
