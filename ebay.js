@@ -120,12 +120,12 @@ async function getValidAccessToken() {
 // All eBay REST calls go through the Cloudflare Worker
 // endpoint: e.g. "/sell/inventory/v1/inventory_item/my-sku"
 // ----------------------------------------------------------------
-async function ebayCall(endpoint, method, body, accessToken) {
+async function ebayCall(endpoint, method, body, accessToken, contentLanguage) {
   const s = loadSettings();
   const res = await fetch(`${s.workerUrl}/ebay-proxy`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ endpoint, method, body, accessToken }),
+    body: JSON.stringify({ endpoint, method, body, accessToken, contentLanguage }),
   });
   return await res.json();
 }
@@ -210,7 +210,8 @@ async function createEbayListing(listing) {
     `/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`,
     'PUT',
     inventoryBody,
-    accessToken
+    accessToken,
+    'en-US'
   );
 
   // A successful PUT inventory item returns 204 (no content) or 200
@@ -242,6 +243,7 @@ async function createEbayListing(listing) {
       ? (s.categories.singleCard || '183454')
       : (s.categories.cardLot   || '183454'),
     listingDescription: listing.description,
+    includeCatalogProductDetails: false,
     listingPolicies: {
       fulfillmentPolicyId,
       paymentPolicyId: s.policies.paymentPolicyId,
@@ -259,7 +261,7 @@ async function createEbayListing(listing) {
     },
   };
 
-  const offerRes = await ebayCall('/sell/inventory/v1/offer', 'POST', offerBody, accessToken);
+  const offerRes = await ebayCall('/sell/inventory/v1/offer', 'POST', offerBody, accessToken, 'en-US');
 
   if (!offerRes.offerId) {
     listing.status = 'error';

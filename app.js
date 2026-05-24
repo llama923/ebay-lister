@@ -78,7 +78,7 @@ function getShippingInfo(type, price, cardCount) {
   return {
     policyKey:   'groundAdvantage',
     label:       'USPS Ground Advantage (6×11×1", 3oz)',
-    packageType: 'LARGE_ENVELOPE',
+    packageType: 'MAILING_BOX',
     dimensions:  { length: 11, width: 6, height: 1, unit: 'INCH' },
     weight:      { value: 3, unit: 'OUNCE' },
   };
