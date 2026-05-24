@@ -438,7 +438,7 @@ function renderQueue() {
       </div>
       <div class="qi-actions">
         <span class="status-badge ${st.cls}">${st.icon} ${st.label}</span>
-        ${listing.status === 'pending' ? `
+        ${(listing.status === 'pending' || listing.status === 'error') ? `
           <button class="btn-edit" onclick="editFromQueue('${listing.id}')" title="Edit">✏️ Edit</button>
           <button class="btn-remove" onclick="removeFromQueue('${listing.id}')" title="Remove">×</button>
         ` : ''}
