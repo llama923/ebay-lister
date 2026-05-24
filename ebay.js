@@ -189,6 +189,26 @@ async function createEbayListing(listing) {
 
   const sku = `pklstr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
+  // Fetch required aspects for this category from eBay Taxonomy API
+  const s2 = loadSettings();
+  const categoryId = listing.type === 'single'
+    ? (s2.categories.singleCard || '183454')
+    : (s2.categories.cardLot || '183454');
+
+  let aspects = { 'Game': ['Pokémon'] }; // always required for category 183454
+  try {
+    const aspectsRes = await fetch(`${s.workerUrl}/taxonomy/aspects?categoryId=${categoryId}`);
+    const aspectsData = await aspectsRes.json();
+    if (aspectsData.required) {
+      aspectsData.required.forEach(a => {
+        // For aspects with a fixed known value for Pokémon cards, set them automatically
+        if (a.name === 'Game') aspects['Game'] = ['Pokémon'];
+      });
+    }
+  } catch (e) {
+    // Non-fatal — proceed with at minimum Game=Pokémon
+  }
+
   const inventoryBody = {
     availability: {
       shipToLocationAvailability: { quantity: 1 },
@@ -203,6 +223,7 @@ async function createEbayListing(listing) {
       title: listing.title,
       description: listing.description,
       imageUrls,
+      aspects,
     },
   };
 
