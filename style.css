@@ -123,12 +123,13 @@ code {
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  padding: 20px;
+  padding: 16px 20px 20px;
   gap: 16px;
   position: sticky;
   top: var(--nav-h);
   max-height: calc(100vh - var(--nav-h));
   overflow-y: auto;
+  align-self: flex-start;
 }
 
 .form-panel h2 {
