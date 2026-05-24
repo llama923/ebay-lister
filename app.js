@@ -136,7 +136,6 @@ function getShippingInfo(type, price, cardCount) {
 
   return gaSmall;
 }
-}
 
 // ----------------------------------------------------------------
 // FORM: LISTING TYPE TOGGLE
