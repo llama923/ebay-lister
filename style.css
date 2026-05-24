@@ -298,8 +298,8 @@ code {
   align-items: flex-end;
   justify-content: space-between;
   padding: 10px 10px;
-  gap: 8px;
-  min-width: 120px;
+  gap: 6px;
+  min-width: 90px;
 }
 
 /* ── Badges ──────────────────────────────────────────────────── */
