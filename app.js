@@ -201,58 +201,43 @@ function handleTitleInput() {
 // ----------------------------------------------------------------
 
 // Convert any image file to JPEG before uploading to eBay.
-// HEIC (iPhone default) is handled by the heic2any library.
-// Other non-JPEG formats are handled by canvas.
+// HEIC (iPhone default) is handled using Chrome's native ImageBitmap API.
+// Other non-JPEG/PNG formats are handled by canvas.
 async function convertToJpeg(file) {
   const type = file.type.toLowerCase();
   const name = file.name.toLowerCase();
 
-  // Detect HEIC/HEIF by MIME type or file extension
   const isHeic = type === 'image/heic' || type === 'image/heif'
     || name.endsWith('.heic') || name.endsWith('.heif');
 
-  if (isHeic) {
-    try {
-      if (typeof heic2any === 'undefined') throw new Error('heic2any not loaded');
-      const blob = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 });
-      const result = Array.isArray(blob) ? blob[0] : blob;
-      return new File([result], file.name.replace(/\.[^/.]+$/i, '.jpg'), { type: 'image/jpeg' });
-    } catch (e) {
-      console.warn('HEIC conversion failed:', e);
-      showToast('⚠️ Could not convert HEIC photo — try using JPEG or PNG instead');
-      return file;
-    }
-  }
-
   // Already JPEG or PNG — no conversion needed
-  if (type === 'image/jpeg' || type === 'image/png') {
+  if (!isHeic && (type === 'image/jpeg' || type === 'image/png')) {
     return file;
   }
 
-  // For other formats (WEBP, BMP, TIFF, etc.) — convert via canvas
-  return new Promise((resolve) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
+  // Use createImageBitmap — Chrome's native decoder handles HEIC on macOS
+  try {
+    const bitmap = await createImageBitmap(file);
+    const canvas = document.createElement('canvas');
+    canvas.width  = bitmap.width;
+    canvas.height = bitmap.height;
+    canvas.getContext('2d').drawImage(bitmap, 0, 0);
+    bitmap.close();
 
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width  = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      canvas.getContext('2d').drawImage(img, 0, 0);
-
+    return await new Promise((resolve, reject) => {
       canvas.toBlob((blob) => {
-        URL.revokeObjectURL(url);
         if (blob) {
           resolve(new File([blob], file.name.replace(/\.[^/.]+$/i, '.jpg'), { type: 'image/jpeg' }));
         } else {
-          resolve(file);
+          reject(new Error('Canvas toBlob failed'));
         }
       }, 'image/jpeg', 0.92);
-    };
-
-    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
-    img.src = url;
-  });
+    });
+  } catch (e) {
+    console.warn('Image conversion failed:', e);
+    showToast('⚠️ Could not convert this photo format. Please use JPEG or PNG.');
+    return file;
+  }
 }
 
 function handlePhotoInput(event) {
