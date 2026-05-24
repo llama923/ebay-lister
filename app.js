@@ -26,10 +26,10 @@ const CONDITION_LABELS = {
 // eBay API condition enum values
 const CONDITION_API = {
   LIKE_NEW:      'LIKE_NEW',
-  VERY_GOOD:     'VERY_GOOD',
-  GOOD:          'GOOD',
-  ACCEPTABLE_HP: 'ACCEPTABLE',
-  ACCEPTABLE_D:  'ACCEPTABLE',
+  VERY_GOOD:     'USED_EXCELLENT',
+  GOOD:          'USED_VERY_GOOD',
+  ACCEPTABLE_HP: 'USED_GOOD',
+  ACCEPTABLE_D:  'USED_ACCEPTABLE',
 };
 
 // ----------------------------------------------------------------

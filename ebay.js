@@ -217,8 +217,9 @@ async function createEbayListing(listing) {
   // A successful PUT inventory item returns 204 (no content) or 200
   // An error returns an errors array
   if (invRes.errors && invRes.errors.length > 0) {
+    const e = invRes.errors[0];
     listing.status = 'error';
-    listing.error = `Inventory error: ${invRes.errors[0].message}`;
+    listing.error = `Inventory error: ${e.message}${e.longMessage ? ' — ' + e.longMessage : ''}${e.parameters ? ' [' + e.parameters.map(p => p.name + '=' + p.value).join(', ') + ']' : ''}`;
     return;
   }
 
