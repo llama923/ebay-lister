@@ -200,16 +200,36 @@ function handleTitleInput() {
 // PHOTO HANDLING
 // ----------------------------------------------------------------
 
-// Convert any image file to JPEG using a canvas.
-// eBay's createImageFromFile endpoint only reliably accepts JPEG/PNG.
-// iPhone photos are HEIC — Chrome can render them but eBay rejects them.
-// This runs silently; the user just adds photos normally.
-function convertToJpeg(file) {
-  // Already a safe format — no conversion needed
-  if (file.type === 'image/jpeg' || file.type === 'image/png') {
-    return Promise.resolve(file);
+// Convert any image file to JPEG before uploading to eBay.
+// HEIC (iPhone default) is handled by the heic2any library.
+// Other non-JPEG formats are handled by canvas.
+async function convertToJpeg(file) {
+  const type = file.type.toLowerCase();
+  const name = file.name.toLowerCase();
+
+  // Detect HEIC/HEIF by MIME type or file extension
+  const isHeic = type === 'image/heic' || type === 'image/heif'
+    || name.endsWith('.heic') || name.endsWith('.heif');
+
+  if (isHeic) {
+    try {
+      if (typeof heic2any === 'undefined') throw new Error('heic2any not loaded');
+      const blob = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.92 });
+      const result = Array.isArray(blob) ? blob[0] : blob;
+      return new File([result], file.name.replace(/\.[^/.]+$/i, '.jpg'), { type: 'image/jpeg' });
+    } catch (e) {
+      console.warn('HEIC conversion failed:', e);
+      showToast('⚠️ Could not convert HEIC photo — try using JPEG or PNG instead');
+      return file;
+    }
   }
 
+  // Already JPEG or PNG — no conversion needed
+  if (type === 'image/jpeg' || type === 'image/png') {
+    return file;
+  }
+
+  // For other formats (WEBP, BMP, TIFF, etc.) — convert via canvas
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -223,20 +243,14 @@ function convertToJpeg(file) {
       canvas.toBlob((blob) => {
         URL.revokeObjectURL(url);
         if (blob) {
-          const jpegName = file.name.replace(/\.[^/.]+$/, '.jpg');
-          resolve(new File([blob], jpegName, { type: 'image/jpeg' }));
+          resolve(new File([blob], file.name.replace(/\.[^/.]+$/i, '.jpg'), { type: 'image/jpeg' }));
         } else {
-          // Conversion failed — send original and let eBay decide
           resolve(file);
         }
       }, 'image/jpeg', 0.92);
     };
 
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      resolve(file); // fallback: send original
-    };
-
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
     img.src = url;
   });
 }
