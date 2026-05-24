@@ -201,8 +201,8 @@ function handleTitleInput() {
 // ----------------------------------------------------------------
 
 // Convert any image file to JPEG before uploading to eBay.
-// HEIC (iPhone default) is handled using Chrome's native ImageBitmap API.
-// Other non-JPEG/PNG formats are handled by canvas.
+// HEIC (iPhone default) requires special handling — browser canvas APIs
+// cannot decode HEIC pixel data even when the browser can display them.
 async function convertToJpeg(file) {
   const type = file.type.toLowerCase();
   const name = file.name.toLowerCase();
@@ -215,29 +215,56 @@ async function convertToJpeg(file) {
     return file;
   }
 
-  // Use createImageBitmap — Chrome's native decoder handles HEIC on macOS
-  try {
-    const bitmap = await createImageBitmap(file);
-    const canvas = document.createElement('canvas');
-    canvas.width  = bitmap.width;
-    canvas.height = bitmap.height;
-    canvas.getContext('2d').drawImage(bitmap, 0, 0);
-    bitmap.close();
-
-    return await new Promise((resolve, reject) => {
-      canvas.toBlob((blob) => {
-        if (blob) {
-          resolve(new File([blob], file.name.replace(/\.[^/.]+$/i, '.jpg'), { type: 'image/jpeg' }));
-        } else {
-          reject(new Error('Canvas toBlob failed'));
-        }
-      }, 'image/jpeg', 0.92);
-    });
-  } catch (e) {
-    console.warn('Image conversion failed:', e);
-    showToast('⚠️ Could not convert this photo format. Please use JPEG or PNG.');
-    return file;
+  // Try Chrome's ImageDecoder API (Chrome 94+, may support HEIC on macOS)
+  if (isHeic && 'ImageDecoder' in window) {
+    try {
+      const decoder = new ImageDecoder({ data: file.stream(), type: 'image/heic' });
+      const result = await decoder.decode();
+      const canvas = new OffscreenCanvas(
+        result.image.displayWidth,
+        result.image.displayHeight
+      );
+      canvas.getContext('2d').drawImage(result.image, 0, 0);
+      const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.92 });
+      return new File([blob], file.name.replace(/\.[^/.]+$/i, '.jpg'), { type: 'image/jpeg' });
+    } catch (e) {
+      console.warn('ImageDecoder failed for HEIC:', e);
+    }
   }
+
+  // Try createImageBitmap (works for non-HEIC formats)
+  if (!isHeic) {
+    try {
+      const bitmap = await createImageBitmap(file);
+      const canvas = document.createElement('canvas');
+      canvas.width  = bitmap.width;
+      canvas.height = bitmap.height;
+      canvas.getContext('2d').drawImage(bitmap, 0, 0);
+      bitmap.close();
+      return await new Promise((resolve, reject) => {
+        canvas.toBlob(blob => blob
+          ? resolve(new File([blob], file.name.replace(/\.[^/.]+$/i, '.jpg'), { type: 'image/jpeg' }))
+          : reject(), 'image/jpeg', 0.92);
+      });
+    } catch (e) {
+      console.warn('Canvas conversion failed:', e);
+    }
+  }
+
+  // HEIC conversion not possible in this browser —
+  // show clear instructions for the user
+  if (isHeic) {
+    alert(
+      'Your iPhone is saving photos in HEIC format, which cannot be uploaded to eBay.\n\n' +
+      'Quick fix (30 seconds):\n' +
+      'iPhone → Settings → Camera → Formats → Most Compatible\n\n' +
+      'This makes your camera save as JPEG automatically. ' +
+      'You only need to do this once.'
+    );
+    return null; // signal to skip this file
+  }
+
+  return file;
 }
 
 function handlePhotoInput(event) {
@@ -249,7 +276,9 @@ function handlePhotoInput(event) {
 async function addPhotos(files) {
   for (const file of files) {
     const converted = await convertToJpeg(file);
-    formPhotos.push({ file: converted, url: URL.createObjectURL(converted) });
+    if (converted) { // null means user was shown an error and should fix their settings
+      formPhotos.push({ file: converted, url: URL.createObjectURL(converted) });
+    }
   }
   renderPhotoStrip();
 }
