@@ -216,11 +216,33 @@ async function createEbayListing(listing) {
 
   // A successful PUT inventory item returns 204 (no content) or 200
   // An error returns an errors array
+  // A successful PUT returns 204 (no content) → invRes will be { success: true }
+  // Error 25001 is a known eBay bug where the item IS created but eBay returns
+  // an internal error anyway. If we get 25001, verify the item exists before failing.
   if (invRes.errors && invRes.errors.length > 0) {
     const e = invRes.errors[0];
-    listing.status = 'error';
-    listing.error = `Inventory error [${e.errorId}]: ${e.message} — ${e.longMessage || 'no detail'} ${e.parameters ? JSON.stringify(e.parameters) : ''}`;
-    return;
+
+    if (e.errorId === 25001) {
+      // Verify whether the item was actually created despite the error
+      const checkRes = await ebayCall(
+        `/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`,
+        'GET',
+        null,
+        accessToken
+      );
+
+      if (!checkRes.sku) {
+        // Item was not created — real failure
+        listing.status = 'error';
+        listing.error = `Inventory error [25001]: eBay internal error and item was not created. Please try again.`;
+        return;
+      }
+      // Item exists — eBay's 25001 was a false alarm, proceed to offer creation
+    } else {
+      listing.status = 'error';
+      listing.error = `Inventory error [${e.errorId}]: ${e.message} — ${e.longMessage || 'no detail'} ${e.parameters ? JSON.stringify(e.parameters) : ''}`;
+      return;
+    }
   }
   // Also catch non-standard error responses
   if (invRes.error) {
