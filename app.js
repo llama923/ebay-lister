@@ -276,6 +276,9 @@ function addToQueue() {
   resetForm();
   renderQueue();
 
+  // Scroll the form panel back to top so the toggle is always visible
+  document.querySelector('.form-panel').scrollTop = 0;
+
   showToast('✅ Added to queue');
 }
 
@@ -298,6 +301,36 @@ function removeFromQueue(id) {
   queue[idx].photos.forEach(p => URL.revokeObjectURL(p.url));
   queue.splice(idx, 1);
   renderQueue();
+}
+
+// Pull a listing back out of the queue and into the form for editing
+function editFromQueue(id) {
+  const idx = queue.findIndex(l => l.id === id);
+  if (idx === -1) return;
+  const listing = queue[idx];
+
+  // Restore form state
+  setType(listing.type);
+  document.getElementById('input-title').value       = listing.title;
+  document.getElementById('input-price').value       = listing.price;
+  document.getElementById('input-condition').value   = listing.condition;
+  document.getElementById('input-cardcount').value   = listing.cardCount || '';
+  document.getElementById('input-description').value = listing.description;
+  document.getElementById('title-count').textContent = listing.title.length;
+
+  // Restore photos
+  formPhotos = [...listing.photos];
+  renderPhotoStrip();
+  updateShippingPreview();
+
+  // Remove from queue (photos stay alive since formPhotos now holds them)
+  queue.splice(idx, 1);
+  renderQueue();
+
+  // Scroll form to top so toggle is visible
+  document.querySelector('.form-panel').scrollTop = 0;
+
+  showToast('✏️ Listing moved back to form for editing');
 }
 
 function clearQueue() {
@@ -405,9 +438,10 @@ function renderQueue() {
       </div>
       <div class="qi-actions">
         <span class="status-badge ${st.cls}">${st.icon} ${st.label}</span>
-        ${listing.status === 'pending'
-          ? `<button class="btn-remove" onclick="removeFromQueue('${listing.id}')" title="Remove">×</button>`
-          : ''}
+        ${listing.status === 'pending' ? `
+          <button class="btn-edit" onclick="editFromQueue('${listing.id}')" title="Edit">✏️ Edit</button>
+          <button class="btn-remove" onclick="removeFromQueue('${listing.id}')" title="Remove">×</button>
+        ` : ''}
       </div>
     `;
 
