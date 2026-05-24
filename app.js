@@ -199,16 +199,59 @@ function handleTitleInput() {
 // ----------------------------------------------------------------
 // PHOTO HANDLING
 // ----------------------------------------------------------------
+
+// Convert any image file to JPEG using a canvas.
+// eBay's createImageFromFile endpoint only reliably accepts JPEG/PNG.
+// iPhone photos are HEIC — Chrome can render them but eBay rejects them.
+// This runs silently; the user just adds photos normally.
+function convertToJpeg(file) {
+  // Already a safe format — no conversion needed
+  if (file.type === 'image/jpeg' || file.type === 'image/png') {
+    return Promise.resolve(file);
+  }
+
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width  = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      canvas.getContext('2d').drawImage(img, 0, 0);
+
+      canvas.toBlob((blob) => {
+        URL.revokeObjectURL(url);
+        if (blob) {
+          const jpegName = file.name.replace(/\.[^/.]+$/, '.jpg');
+          resolve(new File([blob], jpegName, { type: 'image/jpeg' }));
+        } else {
+          // Conversion failed — send original and let eBay decide
+          resolve(file);
+        }
+      }, 'image/jpeg', 0.92);
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(file); // fallback: send original
+    };
+
+    img.src = url;
+  });
+}
+
 function handlePhotoInput(event) {
   const files = Array.from(event.target.files).filter(f => f.type.startsWith('image/'));
   addPhotos(files);
-  event.target.value = ''; // reset so the same file can be added again if needed
+  event.target.value = '';
 }
 
-function addPhotos(files) {
-  files.forEach(file => {
-    formPhotos.push({ file, url: URL.createObjectURL(file) });
-  });
+async function addPhotos(files) {
+  for (const file of files) {
+    const converted = await convertToJpeg(file);
+    formPhotos.push({ file: converted, url: URL.createObjectURL(converted) });
+  }
   renderPhotoStrip();
 }
 
