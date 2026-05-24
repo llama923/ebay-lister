@@ -227,8 +227,7 @@ async function createEbayListing(listing) {
         ],
     packageWeightAndSize: {
       dimensions: listing.shipping.dimensions,
-      packageType: listing.shipping.packageType,
-      weight: listing.shipping.weight,
+      weight:     listing.shipping.weight,
     },
     product: {
       title: listing.title,
