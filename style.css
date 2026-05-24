@@ -440,7 +440,8 @@ textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
   background: var(--accent);
   color: #fff;
 }
-.type-btn:first-child { border-right: 1px solid var(--border); }
+.type-btn:first-child  { border-right: 1px solid var(--border); }
+.type-btn:nth-child(2) { border-right: 1px solid var(--border); }
 
 /* ── Photo Drop Zone ─────────────────────────────────────────── */
 .photo-drop-zone {

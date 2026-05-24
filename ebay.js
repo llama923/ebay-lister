@@ -214,6 +214,17 @@ async function createEbayListing(listing) {
       shipToLocationAvailability: { quantity: 1 },
     },
     condition: listing.conditionApiValue,
+    // Condition descriptors differ for graded vs ungraded cards:
+    // Graded (LIKE_NEW):   27501=Professional Grader + 27502=Grade (both required)
+    // Ungraded (USED_VERY_GOOD): 40001=Card Condition (required)
+    conditionDescriptors: listing.type === 'graded'
+      ? [
+          { name: '27501', values: [listing.graderId] },
+          { name: '27502', values: [listing.gradeId]  },
+        ]
+      : [
+          { name: '40001', values: [listing.conditionDescriptorValue] },
+        ],
     packageWeightAndSize: {
       dimensions: listing.shipping.dimensions,
       packageType: listing.shipping.packageType,

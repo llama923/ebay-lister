@@ -1,20 +1,18 @@
 // ================================================================
 // app.js — Main application logic
-// Handles: listing form, queue management, shipping rules,
-//          description templates, the "List All" flow
 // ================================================================
 
 // ----------------------------------------------------------------
 // CONSTANTS
 // ----------------------------------------------------------------
 
-// Auto-fill descriptions (from your provided templates)
 const DESCRIPTIONS = {
   single: `This is an official TCG Pokémon card and is exactly as shown in the photos. This card will be shipped so that it is 100% protected and will not be affected during shipping. Feel free to message me with any questions!`,
   lot:    `This lot is official TCG Pokémon cards and is exactly as shown in the photos. You will receive every card shown in the photos. These cards will be shipped so that they are 100% protected and will not be affected during shipping. Feel free to message me with any questions!`,
+  graded: `This is an official TCG Pokémon card and is exactly as shown in the photos. This card will be shipped so that it is 100% protected and will not be affected during shipping. Feel free to message me with any questions!`,
 };
 
-// What's shown in the UI vs what the eBay API expects
+// Ungraded card condition labels (shown in dropdown)
 const CONDITION_LABELS = {
   LIKE_NEW:      'Near Mint (NM)',
   VERY_GOOD:     'Lightly Played (LP)',
@@ -23,36 +21,102 @@ const CONDITION_LABELS = {
   ACCEPTABLE_D:  'Damaged (D)',
 };
 
-// eBay API condition enum values
+// For ungraded cards: eBay API condition is always USED_VERY_GOOD (4000)
+// The actual card quality goes in conditionDescriptors
 const CONDITION_API = {
-  LIKE_NEW:      'LIKE_NEW',
-  VERY_GOOD:     'USED_EXCELLENT',
+  LIKE_NEW:      'USED_VERY_GOOD',
+  VERY_GOOD:     'USED_VERY_GOOD',
   GOOD:          'USED_VERY_GOOD',
-  ACCEPTABLE_HP: 'USED_GOOD',
-  ACCEPTABLE_D:  'USED_ACCEPTABLE',
+  ACCEPTABLE_HP: 'USED_VERY_GOOD',
+  ACCEPTABLE_D:  'USED_VERY_GOOD',
 };
+
+// Ungraded condition descriptor: name=40001, values 400010-400013
+const CONDITION_DESCRIPTOR = {
+  LIKE_NEW:      '400010',  // Near Mint or Better
+  VERY_GOOD:     '400011',  // Excellent
+  GOOD:          '400012',  // Very Good
+  ACCEPTABLE_HP: '400013',  // Poor
+  ACCEPTABLE_D:  '400013',  // Poor
+};
+
+// Graded card: Professional Grader descriptor (27501) values
+// Source: https://developer.ebay.com/api-docs/user-guides/static/mip-user-guide/mip-enum-condition-descriptor-ids-for-trading-cards.html
+const GRADERS = [
+  { label: 'PSA',   id: '275010' },
+  { label: 'BGS',   id: '275013' },
+  { label: 'CGC',   id: '275015' },
+  { label: 'SGC',   id: '275016' },
+  { label: 'BCCG',  id: '275011' },
+  { label: 'BVG',   id: '275012' },
+  { label: 'HGA',   id: '275019' },
+  { label: 'GMA',   id: '275018' },
+  { label: 'ISA',   id: '2750110' },
+  { label: 'Other', id: '2750123' },
+];
+
+// Graded card: Grade descriptor (27502) values
+const GRADES = [
+  { label: '10',               id: '275020' },
+  { label: '9.5',              id: '275021' },
+  { label: '9',                id: '275022' },
+  { label: '8.5',              id: '275023' },
+  { label: '8',                id: '275024' },
+  { label: '7.5',              id: '275025' },
+  { label: '7',                id: '275026' },
+  { label: '6.5',              id: '275027' },
+  { label: '6',                id: '275028' },
+  { label: '5.5',              id: '275029' },
+  { label: '5',                id: '2750210' },
+  { label: '4.5',              id: '2750211' },
+  { label: '4',                id: '2750212' },
+  { label: '3.5',              id: '2750213' },
+  { label: '3',                id: '2750214' },
+  { label: '2.5',              id: '2750215' },
+  { label: '2',                id: '2750216' },
+  { label: '1.5',              id: '2750217' },
+  { label: '1',                id: '2750218' },
+  { label: 'Authentic',        id: '2750219' },
+  { label: 'Authentic Altered',id: '2750220' },
+];
 
 // ----------------------------------------------------------------
 // STATE
 // ----------------------------------------------------------------
-let currentType  = 'single';   // 'single' | 'lot'
-let formPhotos   = [];          // { file: File, url: string }[]
-let dragSrcIndex = null;        // for photo reorder drag-and-drop
-const queue      = [];          // all listings waiting to be submitted
+let currentType  = 'single';   // 'single' | 'lot' | 'graded'
+let formPhotos   = [];
+let dragSrcIndex = null;
+const queue      = [];
 
 // ----------------------------------------------------------------
 // SHIPPING RULES
-// Returns the correct shipping config based on your business rules:
-//
-//   Single card, price < $20      → eBay Standard Envelope (2oz, 4×8×1")
-//   Single card, price ≥ $20      → USPS Ground Advantage  (3oz, 6×11×1")
-//   Card lot, count < 20          → USPS Ground Advantage  (3oz, 6×11×1")
-//   Card lot, count ≥ 20, ≤ $200  → USPS Ground Advantage  (3oz, 6×11×1")
-//   Card lot, count ≥ 20, > $200  → USPS Ground Advantage  (5oz, 7×11×5")
+//   Single card < $20        → eBay Standard Envelope (2oz, 4×8×1")
+//   Single card ≥ $20        → USPS Ground Advantage small (3oz, 6×11×1")
+//   Graded single ≤ $100     → USPS Ground Advantage small (3oz, 6×11×1")
+//   Graded single > $100     → USPS Ground Advantage large (5oz, 7×11×5")
+//   Lot, < 20 cards          → USPS Ground Advantage small (3oz, 6×11×1")
+//   Lot, ≥ 20 cards, ≤ $200  → USPS Ground Advantage small (3oz, 6×11×1")
+//   Lot, ≥ 20 cards, > $200  → USPS Ground Advantage large (5oz, 7×11×5")
 // ----------------------------------------------------------------
 function getShippingInfo(type, price, cardCount) {
-  const p = parseFloat(price)    || 0;
-  const c = parseInt(cardCount)  || 0;
+  const p = parseFloat(price)   || 0;
+  const c = parseInt(cardCount) || 0;
+
+  const gaSmall = {
+    policyKey:   'groundAdvantage',
+    label:       'USPS Ground Advantage (6×11×1", 3oz)',
+    packageType: 'MAILING_BOX',
+    dimensions:  { length: 11, width: 6, height: 1, unit: 'INCH' },
+    weight:      { value: 3, unit: 'OUNCE' },
+  };
+
+  const gaLarge = {
+    policyKey:   'groundAdvantage',
+    label:       'USPS Ground Advantage — Large (7×11×5", 5oz)',
+    packageType: 'PACKAGE_THICK_ENVELOPE',
+    dimensions:  { length: 11, width: 7, height: 5, unit: 'INCH' },
+    weight:      { value: 5, unit: 'OUNCE' },
+  };
 
   if (type === 'single' && p > 0 && p < 20) {
     return {
@@ -64,24 +128,14 @@ function getShippingInfo(type, price, cardCount) {
     };
   }
 
-  if (type === 'lot' && c >= 20 && p > 200) {
-    return {
-      policyKey:   'groundAdvantage',
-      label:       'USPS Ground Advantage — Large (7×11×5", 5oz)',
-      packageType: 'PACKAGE_THICK_ENVELOPE',
-      dimensions:  { length: 11, width: 7, height: 5, unit: 'INCH' },
-      weight:      { value: 5, unit: 'OUNCE' },
-    };
+  if (type === 'graded') {
+    return p > 100 ? gaLarge : gaSmall;
   }
 
-  // All other cases: standard Ground Advantage small package
-  return {
-    policyKey:   'groundAdvantage',
-    label:       'USPS Ground Advantage (6×11×1", 3oz)',
-    packageType: 'MAILING_BOX',
-    dimensions:  { length: 11, width: 6, height: 1, unit: 'INCH' },
-    weight:      { value: 3, unit: 'OUNCE' },
-  };
+  if (type === 'lot' && c >= 20 && p > 200) return gaLarge;
+
+  return gaSmall;
+}
 }
 
 // ----------------------------------------------------------------
@@ -93,11 +147,15 @@ function setType(type) {
   document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
   document.querySelector(`.type-btn[data-type="${type}"]`).classList.add('active');
 
-  // Show card count input only for lots
-  document.getElementById('group-cardcount').style.display = type === 'lot' ? 'block' : 'none';
+  // Show/hide fields based on type
+  const isGraded = type === 'graded';
+  const isLot    = type === 'lot';
 
-  // Auto-fill description for the chosen type
-  document.getElementById('input-description').value = DESCRIPTIONS[type];
+  document.getElementById('group-cardcount').style.display  = isLot     ? 'block' : 'none';
+  document.getElementById('group-condition').style.display  = isGraded  ? 'none'  : 'block';
+  document.getElementById('group-graded').style.display     = isGraded  ? 'block' : 'none';
+
+  document.getElementById('input-description').value = DESCRIPTIONS[type] || DESCRIPTIONS.single;
 
   updateShippingPreview();
 }
@@ -236,17 +294,35 @@ function setupDropZone() {
 function addToQueue() {
   const title     = document.getElementById('input-title').value.trim();
   const price     = document.getElementById('input-price').value;
-  const condition = document.getElementById('input-condition').value;
   const cardCount = document.getElementById('input-cardcount').value;
   const desc      = document.getElementById('input-description').value.trim();
 
   // Validation
-  if (!title)                         { showToast('⚠️ Title is required'); return; }
+  if (!title)                           { showToast('⚠️ Title is required'); return; }
   if (!price || parseFloat(price) <= 0) { showToast('⚠️ Price is required');  return; }
-  if (formPhotos.length === 0)         { showToast('⚠️ At least one photo is required'); return; }
+  if (formPhotos.length === 0)          { showToast('⚠️ At least one photo is required'); return; }
+
   if (currentType === 'lot' && (!cardCount || parseInt(cardCount) < 1)) {
     showToast('⚠️ Enter the number of cards in this lot');
     return;
+  }
+
+  // Graded-specific fields
+  let condition = null, conditionLabel = null, conditionApiValue = null,
+      conditionDescriptorValue = null, graderId = null, gradeId = null,
+      graderLabel = null, gradeLabel = null;
+
+  if (currentType === 'graded') {
+    graderId    = document.getElementById('input-grader').value;
+    gradeId     = document.getElementById('input-grade').value;
+    graderLabel = GRADERS.find(g => g.id === graderId)?.label || graderId;
+    gradeLabel  = GRADES.find(g => g.id === gradeId)?.label   || gradeId;
+    conditionApiValue = 'LIKE_NEW'; // eBay: LIKE_NEW = graded card
+  } else {
+    condition             = document.getElementById('input-condition').value;
+    conditionLabel        = CONDITION_LABELS[condition];
+    conditionApiValue     = CONDITION_API[condition];
+    conditionDescriptorValue = CONDITION_DESCRIPTOR[condition];
   }
 
   const shipping = getShippingInfo(currentType, price, cardCount);
@@ -257,8 +333,13 @@ function addToQueue() {
     title,
     price:           parseFloat(price).toFixed(2),
     condition,
-    conditionLabel:  CONDITION_LABELS[condition],
-    conditionApiValue: CONDITION_API[condition],
+    conditionLabel,
+    conditionApiValue,
+    conditionDescriptorValue,
+    graderId,
+    gradeId,
+    graderLabel,
+    gradeLabel,
     cardCount:       currentType === 'lot' ? parseInt(cardCount) : null,
     photos:          [...formPhotos],  // snapshot the current photo array
     description:     desc,
@@ -286,7 +367,7 @@ function resetForm() {
   document.getElementById('input-title').value       = '';
   document.getElementById('input-price').value       = '';
   document.getElementById('input-cardcount').value   = '';
-  document.getElementById('input-description').value = DESCRIPTIONS[currentType];
+  document.getElementById('input-description').value = DESCRIPTIONS[currentType] || DESCRIPTIONS.single;
   document.getElementById('title-count').textContent = '0';
   renderPhotoStrip();
   updateShippingPreview();
@@ -309,27 +390,28 @@ function editFromQueue(id) {
   if (idx === -1) return;
   const listing = queue[idx];
 
-  // Restore form state
   setType(listing.type);
   document.getElementById('input-title').value       = listing.title;
   document.getElementById('input-price').value       = listing.price;
-  document.getElementById('input-condition').value   = listing.condition;
   document.getElementById('input-cardcount').value   = listing.cardCount || '';
   document.getElementById('input-description').value = listing.description;
   document.getElementById('title-count').textContent = listing.title.length;
 
-  // Restore photos
+  if (listing.type === 'graded') {
+    document.getElementById('input-grader').value = listing.graderId || '';
+    document.getElementById('input-grade').value  = listing.gradeId  || '';
+  } else {
+    document.getElementById('input-condition').value = listing.condition || 'LIKE_NEW';
+  }
+
   formPhotos = [...listing.photos];
   renderPhotoStrip();
   updateShippingPreview();
 
-  // Remove from queue (photos stay alive since formPhotos now holds them)
   queue.splice(idx, 1);
   renderQueue();
 
-  // Scroll form to top so toggle is visible
   document.querySelector('.form-panel').scrollTop = 0;
-
   showToast('✏️ Listing moved back to form for editing');
 }
 
@@ -426,8 +508,10 @@ function renderQueue() {
         <div class="qi-title">${escHtml(listing.title)}</div>
         <div class="qi-price">$${listing.price}</div>
         <div class="qi-meta">
-          <span class="badge badge-type">${listing.type === 'single' ? 'Single' : 'Lot'}</span>
-          <span class="badge badge-cond">${escHtml(listing.conditionLabel)}</span>
+          <span class="badge badge-type">${listing.type === 'single' ? 'Single' : listing.type === 'graded' ? 'Graded' : 'Lot'}</span>
+          ${listing.type === 'graded'
+            ? `<span class="badge badge-cond">${escHtml(listing.graderLabel)} ${escHtml(listing.gradeLabel)}</span>`
+            : `<span class="badge badge-cond">${escHtml(listing.conditionLabel)}</span>`}
           ${listing.cardCount ? `<span class="badge badge-count">${listing.cardCount} cards</span>` : ''}
         </div>
         <div class="qi-shipping">📦 ${escHtml(listing.shipping.label)}</div>
@@ -523,7 +607,6 @@ function escHtml(str) {
 // INIT
 // ----------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
-  // Set default description
   document.getElementById('input-description').value = DESCRIPTIONS.single;
 
   // Wire up photo input
