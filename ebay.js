@@ -194,7 +194,6 @@ async function createEbayListing(listing) {
       shipToLocationAvailability: { quantity: 1 },
     },
     condition: listing.conditionApiValue,
-    conditionDescription: listing.conditionLabel,
     packageWeightAndSize: {
       dimensions: listing.shipping.dimensions,
       packageType: listing.shipping.packageType,
@@ -219,7 +218,13 @@ async function createEbayListing(listing) {
   if (invRes.errors && invRes.errors.length > 0) {
     const e = invRes.errors[0];
     listing.status = 'error';
-    listing.error = `Inventory error: ${e.message}${e.longMessage ? ' — ' + e.longMessage : ''}${e.parameters ? ' [' + e.parameters.map(p => p.name + '=' + p.value).join(', ') + ']' : ''}`;
+    listing.error = `Inventory error [${e.errorId}]: ${e.message} — ${e.longMessage || 'no detail'} ${e.parameters ? JSON.stringify(e.parameters) : ''}`;
+    return;
+  }
+  // Also catch non-standard error responses
+  if (invRes.error) {
+    listing.status = 'error';
+    listing.error = `Inventory error: ${JSON.stringify(invRes)}`;
     return;
   }
 
