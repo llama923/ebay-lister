@@ -195,14 +195,14 @@ async function createEbayListing(listing) {
     ? (s2.categories.singleCard || '183454')
     : (s2.categories.cardLot || '183454');
 
-  let aspects = { 'Game': ['Pokémon'] }; // always required for category 183454
+  let aspects = { 'Game': ['Pokemon'] }; // required for category 183454
   try {
     const aspectsRes = await fetch(`${s.workerUrl}/taxonomy/aspects?categoryId=${categoryId}`);
     const aspectsData = await aspectsRes.json();
     if (aspectsData.required) {
       aspectsData.required.forEach(a => {
         // For aspects with a fixed known value for Pokémon cards, set them automatically
-        if (a.name === 'Game') aspects['Game'] = ['Pokémon'];
+        if (a.name === 'Game') aspects['Game'] = ['Pokemon'];
       });
     }
   } catch (e) {
@@ -253,12 +253,27 @@ async function createEbayListing(listing) {
       );
 
       if (!checkRes.sku) {
-        // Item was not created — real failure
         listing.status = 'error';
         listing.error = `Inventory error [25001]: eBay internal error and item was not created. Please try again.`;
         return;
       }
-      // Item exists — eBay's 25001 was a false alarm, proceed to offer creation
+
+      // Item exists but may not have aspects saved due to the internal error.
+      // Retry the PUT to ensure aspects are stored before publishing.
+      const retryRes = await ebayCall(
+        `/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`,
+        'PUT',
+        inventoryBody,
+        accessToken,
+        'en-US'
+      );
+      // If retry also gets 25001, check again — if item exists, proceed anyway
+      if (retryRes.errors && retryRes.errors.length > 0 && retryRes.errors[0].errorId !== 25001) {
+        listing.status = 'error';
+        listing.error = `Inventory retry error: ${retryRes.errors[0].message}`;
+        return;
+      }
+      // Proceed to offer creation
     } else {
       listing.status = 'error';
       listing.error = `Inventory error [${e.errorId}]: ${e.message} — ${e.longMessage || 'no detail'} ${e.parameters ? JSON.stringify(e.parameters) : ''}`;
