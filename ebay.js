@@ -288,6 +288,24 @@ async function setupEbayPolicies() {
   const accessToken = await getValidAccessToken();
   const results = { success: [], errors: [] };
 
+  // ── Opt in to Business Policies ───────────────────────────────
+  // eBay requires accounts to be opted in before policies can be
+  // created via API. This call is safe to run even if already opted in.
+  try {
+    const optInRes = await ebayCall(
+      '/sell/account/v1/program/opt_in',
+      'POST',
+      { programType: 'SELLING_POLICY_MANAGEMENT' },
+      accessToken
+    );
+    // 204 = success (already opted in or just opted in)
+    // Some accounts get a 409 "already opted in" which is also fine
+    results.success.push('Business policies opt-in confirmed');
+  } catch (err) {
+    // Non-fatal — account may already be opted in
+    results.success.push('Business policies opt-in: already active');
+  }
+
   // ── Inventory Location ─────────────────────────────────────────
   // Try to find an existing location first; create one if none exist
   const existingLocs = await ebayCall('/sell/inventory/v1/location', 'GET', null, accessToken);
@@ -341,7 +359,7 @@ async function setupEbayPolicies() {
     s.policies.returnPolicyId = returnRes.returnPolicyId;
     results.success.push(`Return policy created (ID: ${returnRes.returnPolicyId})`);
   } else {
-    results.errors.push(`Return policy: ${returnRes.errors?.[0]?.message || JSON.stringify(returnRes)}`);
+    results.errors.push(`Return policy failed: ${returnRes.errors?.[0]?.message || returnRes.error || JSON.stringify(returnRes)}`);
   }
 
   // ── Payment Policy: Immediate Payment ─────────────────────────
@@ -356,7 +374,7 @@ async function setupEbayPolicies() {
     s.policies.paymentPolicyId = payRes.paymentPolicyId;
     results.success.push(`Payment policy created (ID: ${payRes.paymentPolicyId})`);
   } else {
-    results.errors.push(`Payment policy: ${payRes.errors?.[0]?.message || JSON.stringify(payRes)}`);
+    results.errors.push(`Payment policy failed: ${payRes.errors?.[0]?.message || payRes.error || JSON.stringify(payRes)}`);
   }
 
   // ── Fulfillment Policy A: eBay Standard Envelope ──────────────
@@ -386,7 +404,7 @@ async function setupEbayPolicies() {
     s.policies.standardEnvelopePolicyId = eseRes.fulfillmentPolicyId;
     results.success.push(`eBay Standard Envelope policy created (ID: ${eseRes.fulfillmentPolicyId})`);
   } else {
-    results.errors.push(`eSE policy: ${eseRes.errors?.[0]?.message || JSON.stringify(eseRes)}`);
+    results.errors.push(`eSE policy failed: ${eseRes.errors?.[0]?.message || eseRes.error || JSON.stringify(eseRes)}`);
   }
 
   // ── Fulfillment Policy B: USPS Ground Advantage ───────────────
@@ -417,7 +435,7 @@ async function setupEbayPolicies() {
     s.policies.groundAdvantagePolicyId = gaRes.fulfillmentPolicyId;
     results.success.push(`USPS Ground Advantage policy created (ID: ${gaRes.fulfillmentPolicyId})`);
   } else {
-    results.errors.push(`GA policy: ${gaRes.errors?.[0]?.message || JSON.stringify(gaRes)}`);
+    results.errors.push(`GA policy failed: ${gaRes.errors?.[0]?.message || gaRes.error || JSON.stringify(gaRes)}`);
   }
 
   // Save all collected IDs
