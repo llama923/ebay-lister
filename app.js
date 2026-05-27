@@ -31,13 +31,15 @@ const CONDITION_API = {
   ACCEPTABLE_D:  'USED_VERY_GOOD',
 };
 
-// Ungraded condition descriptor: name=40001, values 400010-400013
+// Ungraded condition descriptor: name=40001
+// Category 183454 (CCG/Pokémon) uses different values than sports cards:
+// Source: https://developer.ebay.com/api-docs/user-guides/static/mip-user-guide/mip-enum-condition-descriptor-ids-for-trading-cards.html
 const CONDITION_DESCRIPTOR = {
   LIKE_NEW:      '400010',  // Near Mint or Better
-  VERY_GOOD:     '400011',  // Excellent
-  GOOD:          '400012',  // Very Good
-  ACCEPTABLE_HP: '400013',  // Poor
-  ACCEPTABLE_D:  '400013',  // Poor
+  VERY_GOOD:     '400015',  // Lightly Played (Excellent)
+  GOOD:          '400016',  // Moderately Played (Very Good)
+  ACCEPTABLE_HP: '400017',  // Heavily Played (Poor)
+  ACCEPTABLE_D:  '400017',  // Heavily Played (Poor) — no lower value exists for 183454
 };
 
 // Graded card: Professional Grader descriptor (27501) values
