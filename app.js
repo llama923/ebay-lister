@@ -391,10 +391,12 @@ function addToQueue() {
     gradeLabel  = GRADES.find(g => g.id === gradeId)?.label   || gradeId;
     conditionApiValue = 'LIKE_NEW'; // eBay: LIKE_NEW = graded card
   } else if (currentType === 'lot') {
-    // Lots are always "used" — no condition dropdown shown, no descriptor needed
-    conditionLabel    = 'Used';
-    conditionApiValue = 'USED_GOOD';
-    conditionDescriptorValue = null;
+    // eBay category 183454 only accepts LIKE_NEW (graded) or USED_VERY_GOOD (ungraded).
+    // For lots, we use USED_VERY_GOOD with descriptor 400016 (Moderately Played)
+    // as a fair middle-ground for mixed condition lots.
+    conditionLabel           = 'Used';
+    conditionApiValue        = 'USED_VERY_GOOD';
+    conditionDescriptorValue = '400016';
   } else {
     condition             = document.getElementById('input-condition').value;
     conditionLabel        = CONDITION_LABELS[condition];
