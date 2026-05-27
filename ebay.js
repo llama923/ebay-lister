@@ -214,17 +214,20 @@ async function createEbayListing(listing) {
       shipToLocationAvailability: { quantity: 1 },
     },
     condition: listing.conditionApiValue,
-    // Condition descriptors differ for graded vs ungraded cards:
-    // Graded (LIKE_NEW):   27501=Professional Grader + 27502=Grade (both required)
-    // Ungraded (USED_VERY_GOOD): 40001=Card Condition (required)
-    conditionDescriptors: listing.type === 'graded'
-      ? [
-          { name: '27501', values: [listing.graderId] },
-          { name: '27502', values: [listing.gradeId]  },
-        ]
-      : [
-          { name: '40001', values: [listing.conditionDescriptorValue] },
-        ],
+    // Condition descriptors:
+    // Graded: 27501=Professional Grader + 27502=Grade
+    // Ungraded single: 40001=Card Condition with category-specific value
+    // Lot: no condition descriptors sent (matches eBay's manual listing behaviour)
+    ...(listing.type === 'graded' ? {
+      conditionDescriptors: [
+        { name: '27501', values: [listing.graderId] },
+        { name: '27502', values: [listing.gradeId]  },
+      ]
+    } : listing.conditionDescriptorValue ? {
+      conditionDescriptors: [
+        { name: '40001', values: [listing.conditionDescriptorValue] },
+      ]
+    } : {}),
     packageWeightAndSize: {
       dimensions: listing.shipping.dimensions,
       weight:     listing.shipping.weight,
@@ -307,9 +310,9 @@ async function createEbayListing(listing) {
     marketplaceId: 'EBAY_US',
     format: 'FIXED_PRICE',
     availableQuantity: 1,
-    categoryId: listing.type === 'single'
-      ? (s.categories.singleCard || '183454')
-      : (s.categories.cardLot   || '183454'),
+    categoryId: listing.type === 'lot'
+      ? (s.categories.cardLot    || '183455')  // CCG Mixed Card Lots
+      : (s.categories.singleCard || '183454'),  // CCG Individual Cards (singles + graded)
     listingDescription: listing.description,
     includeCatalogProductDetails: false,
     listingPolicies: {

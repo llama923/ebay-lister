@@ -22,7 +22,7 @@ const DEFAULT_SETTINGS = {
   },
   categories: {
     singleCard: '183454',
-    cardLot: '183454',
+    cardLot: '183455',
   },
 };
 
@@ -188,7 +188,7 @@ function renderSettings() {
         </div>
         <div class="form-group flex-1">
           <label>Card Lot Category ID</label>
-          <input type="text" id="s-cat-lot" value="${s.categories.cardLot}" placeholder="183454">
+          <input type="text" id="s-cat-lot" value="${s.categories.cardLot}" placeholder="183455">
         </div>
       </div>
       <button class="btn-secondary" onclick="saveCategories()">Save Category IDs</button>
