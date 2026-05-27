@@ -152,9 +152,9 @@ function setType(type) {
   const isGraded = type === 'graded';
   const isLot    = type === 'lot';
 
-  document.getElementById('group-cardcount').style.display  = isLot     ? 'block' : 'none';
-  document.getElementById('group-condition').style.display  = isGraded  ? 'none'  : 'block';
-  document.getElementById('group-graded').style.display     = isGraded  ? 'block' : 'none';
+  document.getElementById('group-cardcount').style.display  = isLot               ? 'block' : 'none';
+  document.getElementById('group-condition').style.display  = (isGraded || isLot) ? 'none'  : 'block';
+  document.getElementById('group-graded').style.display     = isGraded             ? 'block' : 'none';
 
   document.getElementById('input-description').value = DESCRIPTIONS[type] || DESCRIPTIONS.single;
 
@@ -390,6 +390,11 @@ function addToQueue() {
     graderLabel = GRADERS.find(g => g.id === graderId)?.label || graderId;
     gradeLabel  = GRADES.find(g => g.id === gradeId)?.label   || gradeId;
     conditionApiValue = 'LIKE_NEW'; // eBay: LIKE_NEW = graded card
+  } else if (currentType === 'lot') {
+    // Lots are always "used" — no condition dropdown shown, no descriptor needed
+    conditionLabel    = 'Used';
+    conditionApiValue = 'USED_GOOD';
+    conditionDescriptorValue = null;
   } else {
     condition             = document.getElementById('input-condition').value;
     conditionLabel        = CONDITION_LABELS[condition];
