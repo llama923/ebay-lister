@@ -213,21 +213,27 @@ async function createEbayListing(listing) {
     aspects['Card Condition'] = ['Moderately Played'];
   }
 
+  // Build conditionDescriptors explicitly based on listing type
+  let conditionDescriptors;
+  if (listing.type === 'graded') {
+    conditionDescriptors = [
+      { name: '27501', values: [listing.graderId] },
+      { name: '27502', values: [listing.gradeId]  },
+    ];
+  } else {
+    // Both singles (183454) and lots (183455) require descriptor 40001
+    const descriptorValue = listing.conditionDescriptorValue || '400016';
+    conditionDescriptors = [
+      { name: '40001', values: [descriptorValue] },
+    ];
+  }
+
   const inventoryBody = {
     availability: {
       shipToLocationAvailability: { quantity: 1 },
     },
     condition: listing.conditionApiValue,
-    ...(listing.type === 'graded' ? {
-      conditionDescriptors: [
-        { name: '27501', values: [listing.graderId] },
-        { name: '27502', values: [listing.gradeId]  },
-      ]
-    } : listing.conditionDescriptorValue ? {
-      conditionDescriptors: [
-        { name: '40001', values: [listing.conditionDescriptorValue] },
-      ]
-    } : {}),
+    conditionDescriptors,
     packageWeightAndSize: {
       dimensions: listing.shipping.dimensions,
       weight:     listing.shipping.weight,
