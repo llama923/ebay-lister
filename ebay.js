@@ -191,9 +191,9 @@ async function createEbayListing(listing) {
 
   // Fetch required aspects for this category from eBay Taxonomy API
   const s2 = loadSettings();
-  const categoryId = listing.type === 'single'
-    ? (s2.categories.singleCard || '183454')
-    : (s2.categories.cardLot || '183454');
+  const categoryId = listing.type === 'lot'
+    ? (s2.categories.cardLot    || '183455')
+    : (s2.categories.singleCard || '183454');
 
   let aspects = { 'Game': ['Pokemon'] }; // required for category 183454
   try {
@@ -201,12 +201,16 @@ async function createEbayListing(listing) {
     const aspectsData = await aspectsRes.json();
     if (aspectsData.required) {
       aspectsData.required.forEach(a => {
-        // For aspects with a fixed known value for Pokémon cards, set them automatically
         if (a.name === 'Game') aspects['Game'] = ['Pokemon'];
       });
     }
   } catch (e) {
-    // Non-fatal — proceed with at minimum Game=Pokémon
+    // Non-fatal — proceed with at minimum Game=Pokemon
+  }
+
+  // Category 183455 (CCG Mixed Card Lots) requires "Card Condition" as an item specific
+  if (listing.type === 'lot') {
+    aspects['Card Condition'] = ['Moderately Played'];
   }
 
   const inventoryBody = {
