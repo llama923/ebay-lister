@@ -263,7 +263,9 @@ async function createEbayListing(listing) {
     const e = invRes.errors[0];
 
     if (e.errorId === 25001) {
-      // Verify whether the item was actually created despite the error
+      // Known eBay bug — item is created but eBay returns an internal error.
+      // Verify the item exists, then proceed directly without retrying the PUT.
+      // Retrying the PUT causes eBay to treat subsequent publish as a revision.
       const checkRes = await ebayCall(
         `/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`,
         'GET',
@@ -276,30 +278,13 @@ async function createEbayListing(listing) {
         listing.error = `Inventory error [25001]: eBay internal error and item was not created. Please try again.`;
         return;
       }
-
-      // Item exists but may not have aspects saved due to the internal error.
-      // Retry the PUT to ensure aspects are stored before publishing.
-      const retryRes = await ebayCall(
-        `/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`,
-        'PUT',
-        inventoryBody,
-        accessToken,
-        'en-US'
-      );
-      // If retry also gets 25001, check again — if item exists, proceed anyway
-      if (retryRes.errors && retryRes.errors.length > 0 && retryRes.errors[0].errorId !== 25001) {
-        listing.status = 'error';
-        listing.error = `Inventory retry error: ${retryRes.errors[0].message}`;
-        return;
-      }
-      // Proceed to offer creation
+      // Item confirmed to exist — proceed to offer creation
     } else {
       listing.status = 'error';
       listing.error = `Inventory error [${e.errorId}]: ${e.message} — ${e.longMessage || 'no detail'} ${e.parameters ? JSON.stringify(e.parameters) : ''}`;
       return;
     }
   }
-  // Also catch non-standard error responses
   if (invRes.error) {
     listing.status = 'error';
     listing.error = `Inventory error: ${JSON.stringify(invRes)}`;
@@ -336,6 +321,8 @@ async function createEbayListing(listing) {
         : (s.categories.singleCard || '183454'),
       listingDescription: listing.description,
       includeCatalogProductDetails: false,
+      // Category 183455 (CCG Mixed Card Lots) requires lotSize
+      ...(listing.type === 'lot' ? { lotSize: listing.cardCount || 2 } : {}),
       listingPolicies: {
         fulfillmentPolicyId,
         paymentPolicyId: s.policies.paymentPolicyId,
