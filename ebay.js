@@ -214,16 +214,14 @@ async function createEbayListing(listing) {
       shipToLocationAvailability: { quantity: 1 },
     },
     condition: listing.conditionApiValue,
-    // Condition descriptors:
-    // Graded: 27501=Professional Grader + 27502=Grade
-    // Ungraded single: 40001=Card Condition with category-specific value
-    // Lot: no condition descriptors sent (matches eBay's manual listing behaviour)
+    // Condition descriptors are only required for categories 183050, 183454, 261328.
+    // Category 183455 (CCG Mixed Card Lots) does NOT use condition descriptors.
     ...(listing.type === 'graded' ? {
       conditionDescriptors: [
         { name: '27501', values: [listing.graderId] },
         { name: '27502', values: [listing.gradeId]  },
       ]
-    } : listing.conditionDescriptorValue ? {
+    } : listing.type === 'single' && listing.conditionDescriptorValue ? {
       conditionDescriptors: [
         { name: '40001', values: [listing.conditionDescriptorValue] },
       ]
@@ -350,7 +348,10 @@ async function createEbayListing(listing) {
 
   if (!publishRes.listingId) {
     listing.status = 'error';
-    listing.error = `Publish error: ${publishRes.errors?.[0]?.message || JSON.stringify(publishRes)}`;
+    const errDetail = publishRes.errors
+      ? publishRes.errors.map(e => `[${e.errorId}] ${e.message} — ${e.longMessage || ''}`).join(' | ')
+      : JSON.stringify(publishRes);
+    listing.error = `Publish error: ${errDetail}`;
     return;
   }
 
