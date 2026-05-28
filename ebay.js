@@ -306,49 +306,66 @@ async function createEbayListing(listing) {
     return;
   }
 
-  // ── 3. Create offer ────────────────────────────────────────────
+  // ── 3. Create or reuse offer ───────────────────────────────────
   const fulfillmentPolicyId = listing.shipping.policyKey === 'standardEnvelope'
     ? s.policies.standardEnvelopePolicyId
     : s.policies.groundAdvantagePolicyId;
 
-  const offerBody = {
-    sku,
-    marketplaceId: 'EBAY_US',
-    format: 'FIXED_PRICE',
-    availableQuantity: 1,
-    categoryId: listing.type === 'lot'
-      ? (s.categories.cardLot    || '183455')  // CCG Mixed Card Lots
-      : (s.categories.singleCard || '183454'),  // CCG Individual Cards (singles + graded)
-    listingDescription: listing.description,
-    includeCatalogProductDetails: false,
-    listingPolicies: {
-      fulfillmentPolicyId,
-      paymentPolicyId: s.policies.paymentPolicyId,
-      returnPolicyId:  s.policies.returnPolicyId,
-      bestOfferTerms: {
-        bestOfferEnabled: false,  // NO OFFERS — enforced
-      },
-    },
-    merchantLocationKey: s.merchantLocationKey || 'pokelister-home',
-    pricingSummary: {
-      price: {
-        value: String(listing.price),
-        currency: 'USD',
-      },
-    },
-  };
+  // The 25001 bug sometimes creates an orphaned offer on eBay's servers.
+  // Check for an existing offer for this SKU before creating a new one.
+  // If one exists, use its offerId directly instead of creating a duplicate.
+  let offerId = null;
 
-  const offerRes = await ebayCall('/sell/inventory/v1/offer', 'POST', offerBody, accessToken, 'en-US');
+  const existingOffersRes = await ebayCall(
+    `/sell/inventory/v1/offer?sku=${encodeURIComponent(sku)}`,
+    'GET',
+    null,
+    accessToken
+  );
 
-  if (!offerRes.offerId) {
-    listing.status = 'error';
-    listing.error = `Offer error: ${offerRes.errors?.[0]?.message || JSON.stringify(offerRes)}`;
-    return;
+  if (existingOffersRes.offers && existingOffersRes.offers.length > 0) {
+    offerId = existingOffersRes.offers[0].offerId;
+  } else {
+    const offerBody = {
+      sku,
+      marketplaceId: 'EBAY_US',
+      format: 'FIXED_PRICE',
+      availableQuantity: 1,
+      categoryId: listing.type === 'lot'
+        ? (s.categories.cardLot    || '183455')
+        : (s.categories.singleCard || '183454'),
+      listingDescription: listing.description,
+      includeCatalogProductDetails: false,
+      listingPolicies: {
+        fulfillmentPolicyId,
+        paymentPolicyId: s.policies.paymentPolicyId,
+        returnPolicyId:  s.policies.returnPolicyId,
+        bestOfferTerms: {
+          bestOfferEnabled: false,
+        },
+      },
+      merchantLocationKey: s.merchantLocationKey || 'pokelister-home',
+      pricingSummary: {
+        price: {
+          value: String(listing.price),
+          currency: 'USD',
+        },
+      },
+    };
+
+    const offerRes = await ebayCall('/sell/inventory/v1/offer', 'POST', offerBody, accessToken, 'en-US');
+
+    if (!offerRes.offerId) {
+      listing.status = 'error';
+      listing.error = `Offer error: ${offerRes.errors?.[0]?.message || JSON.stringify(offerRes)}`;
+      return;
+    }
+    offerId = offerRes.offerId;
   }
 
   // ── 4. Publish offer (makes it live) ──────────────────────────
   const publishRes = await ebayCall(
-    `/sell/inventory/v1/offer/${offerRes.offerId}/publish`,
+    `/sell/inventory/v1/offer/${offerId}/publish`,
     'POST',
     {},
     accessToken
