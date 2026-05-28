@@ -218,14 +218,12 @@ async function createEbayListing(listing) {
       shipToLocationAvailability: { quantity: 1 },
     },
     condition: listing.conditionApiValue,
-    // Condition descriptors are only required for categories 183050, 183454, 261328.
-    // Category 183455 (CCG Mixed Card Lots) does NOT use condition descriptors.
     ...(listing.type === 'graded' ? {
       conditionDescriptors: [
         { name: '27501', values: [listing.graderId] },
         { name: '27502', values: [listing.gradeId]  },
       ]
-    } : listing.type === 'single' && listing.conditionDescriptorValue ? {
+    } : listing.conditionDescriptorValue ? {
       conditionDescriptors: [
         { name: '40001', values: [listing.conditionDescriptorValue] },
       ]
